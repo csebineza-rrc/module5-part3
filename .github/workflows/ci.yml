@@ -3,10 +3,10 @@ name: CI Pipeline  ## Workflow name shown in GitHub Actions UI
 on:
   push:
     branches:
-      - main  ## Run on any push to main
+      - master  ## Run on any push to master
   pull_request:
     branches:
-      - main ## Run on PRs targeting main
+      - master ## Run on PRs targeting master
 
 jobs:
   test-backend:
