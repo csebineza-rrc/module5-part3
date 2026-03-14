@@ -1,19 +1,21 @@
-version: '5.1.0'
-
 services:
-  # 1. Mongo database (must be first)
-  mongo:
-    image: mongo:6
-    restart: always
+  # Dedicated Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"  # Main entry point for all traffic
     volumes:
-      - mongo_data:/data/db
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./studentportfolio:/usr/share/nginx/html:ro
+    depends_on:
+      - backend
+      - studentportfolio
 
-
-  # 2. Backend banking API
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    # Remove host port mapping since we'll access through Nginx
     ports:
       - "5000:5000"
     environment:
@@ -22,39 +24,28 @@ services:
     depends_on:
       - mongo
 
+  mongo:
+    image: mongo:6
+    restart: always
+    volumes:
+      - mongo_data:/data/db
 
-  # 3. Transactions microservice
+  # Frontend service (serves static files)
+  studentportfolio:
+    build: ./studentportfolio
+
+    # Remove host port mapping since we'll access through Nginx
+    # ports:
+    #   - "3000:80"
+    # This should just serve static files, no Nginx config needed here
   transactions:
     build: ./transactions
     environment:
       - MONGO_URI=mongodb://mongo:27017
-      - PORT=5001
+      - PORT=3000  # Explicitly set port
     ports:
-      - "5001:5001"
+      - "3000:3000"  # Expose for debugging
     depends_on:
       - mongo
-
-
-  # 4. Frontend service (serves the UI)
-  studentportfolio:
-    build: ./studentportfolio
-    ports:
-      - "3000:80"
-    depends_on:
-      - backend
-
-
-  # 5. Nginx reverse proxy (entry point for browser traffic)
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-    depends_on:
-      - backend
-      - studentportfolio
-      - transactions
-
 volumes:
   mongo_data:
