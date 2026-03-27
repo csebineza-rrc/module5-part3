@@ -1,106 +1,145 @@
 #!/bin/bash
 
-echo "===== STEP 1: Check prerequisites ====="
+echo "[INFO] ===== STEP 1: Check prerequisites ====="
 
 # Check Docker
 if ! command -v docker &> /dev/null
 then
-    echo "Docker is NOT installed"
+    echo "[ERROR] Docker is NOT installed"
     exit 1
 fi
 
-# Check Docker Compose
-if ! command -v docker-compose &> /dev/null
+# Use modern docker compose (instead of docker-compose)
+if ! docker compose version &> /dev/null
 then
-    echo "Docker Compose is NOT installed"
+    echo "[ERROR] Docker Compose is NOT available"
     exit 1
 fi
 
-echo "Docker and Compose are installed ✅"
+echo "[INFO] Docker and Compose are installed ✅"
 
 
-echo "===== STEP 2: Go to project directory ====="
+echo ""
+echo "[INFO] ===== STEP 2: Go to project directory ====="
 
 cd "$(dirname "$0")" || exit
 
-# Check docker-compose file
 if [ ! -f "docker-compose.yml" ]; then
-    echo "docker-compose.yml not found ❌"
+    echo "[ERROR] docker-compose.yml not found ❌"
     exit 1
 fi
 
-echo "docker-compose.yml found ✅"
+echo "[INFO] docker-compose.yml found ✅"
 
 
-echo "===== STEP 3: Build & Deploy ====="
+echo ""
+echo "[INFO] ===== STEP 3: Build & Deploy ====="
 
-docker-compose up -d --build
+docker compose up -d --build
 
-echo "Containers started ✅"
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to build/start containers ❌"
+    exit 1
+fi
+
+echo "[INFO] Containers started successfully ✅"
 
 
-echo "===== STEP 4: Health Check ====="
+echo ""
+echo "[INFO] ===== STEP 4: Health Check ====="
 
 sleep 5
 
-curl -f http://localhost:3000 && echo "Port 3000 OK ✅" || echo "Port 3000 FAILED ❌"
-curl -f http://localhost:5000 && echo "Port 5000 OK ✅" || echo "Port 5000 FAILED ❌"
+curl -f http://localhost:3000 &> /dev/null \
+    && echo "[INFO] Port 3000 OK ✅" \
+    || echo "[WARNING] Port 3000 FAILED ❌"
+
+curl -f http://localhost:5000 &> /dev/null \
+    && echo "[INFO] Port 5000 OK ✅" \
+    || echo "[WARNING] Port 5000 FAILED ❌"
 
 
-echo "===== STEP 5: List images ====="
+echo ""
+echo "[INFO] ===== STEP 5: List Docker Images ====="
 
 docker images
 
 
-echo "===== STEP 6: Show running containers ====="
+echo ""
+echo "[INFO] ===== STEP 6: Show running containers ====="
 
 docker ps
 
 
-echo "===== STEP 7: Get nginx container ID ====="
+echo ""
+echo "[INFO] ===== STEP 7: Get nginx container ID ====="
 
-NGINX_ID=$(docker ps | grep nginx | awk '{print $1}')
+NGINX_ID=$(docker ps --filter "ancestor=nginx:alpine" --format "{{.ID}}")
 
-echo "Nginx Container ID: $NGINX_ID"
+if [ -z "$NGINX_ID" ]; then
+    echo "[WARNING] No nginx container found ❌"
+else
+    echo "[INFO] Nginx Container ID: $NGINX_ID"
+fi
 
 
-echo "===== STEP 8: Validate page ====="
+echo ""
+echo "[INFO] ===== STEP 8: Validate page ====="
 
-curl http://localhost || echo "Page not reachable ❌"
+curl -f http://localhost &> /dev/null \
+    && echo "[INFO] Web page reachable ✅" \
+    || echo "[WARNING] Page not reachable ❌"
 
 
-echo "===== STEP 9: Check jq ====="
+echo ""
+echo "[INFO] ===== STEP 9: Check jq ====="
 
 if ! command -v jq &> /dev/null
 then
-    echo "jq not installed, installing..."
+    echo "[INFO] jq not installed, installing..."
     sudo apt-get update
     sudo apt-get install -y jq
 fi
 
-echo "jq is installed ✅"
+echo "[INFO] jq is installed ✅"
 
 
-echo "===== STEP 10: Inspect nginx image ====="
+echo ""
+echo "[INFO] ===== STEP 10: Inspect nginx image ====="
 
 docker inspect nginx:alpine > nginx-logs.txt
 
-echo "Logs saved to nginx-logs.txt ✅"
+if [ $? -ne 0 ]; then
+    echo "[ERROR] Failed to inspect nginx image ❌"
+    exit 1
+fi
+
+echo "[INFO] nginx inspection output saved to nginx-logs.txt ✅"
 
 
-echo "===== STEP 11: Extract values ====="
+echo ""
+echo "[INFO] ===== STEP 11: Extracting values from nginx-logs ====="
 
+echo ""
 echo "RepoTags:"
-jq '.[0].RepoTags' nginx-logs.txt
+jq -r '.[0].RepoTags[]' nginx-logs.txt
 
+echo ""
 echo "Created:"
-jq '.[0].Created' nginx-logs.txt
+jq -r '.[0].Created' nginx-logs.txt
 
+echo ""
 echo "OS:"
-jq '.[0].Os' nginx-logs.txt
+jq -r '.[0].Os' nginx-logs.txt
 
+echo ""
 echo "Config:"
 jq '.[0].Config' nginx-logs.txt
 
+echo ""
 echo "ExposedPorts:"
 jq '.[0].Config.ExposedPorts' nginx-logs.txt
+
+
+echo ""
+echo "[INFO] All tasks completed successfully ✅"
